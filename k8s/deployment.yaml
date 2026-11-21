@@ -1,3 +1,4 @@
+
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -16,8 +17,7 @@ spec:
     spec:
       containers:
         - name: task-manager
-          # Remplacer par votre image Docker Hub avant le déploiement
-          image: DOCKERHUB_USERNAME/task-manager:1.0.0
+          image: safaza/task-manager:1.0.0
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
@@ -48,6 +48,12 @@ spec:
             readOnlyRootFilesystem: true
             capabilities:
               drop: ["ALL"]
+          volumeMounts:
+            - name: tmp-volume
+              mountPath: /tmp
+      volumes:
+        - name: tmp-volume
+          emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
@@ -62,3 +68,4 @@ spec:
       port: 8080
       targetPort: 8080
       nodePort: 30080
+
