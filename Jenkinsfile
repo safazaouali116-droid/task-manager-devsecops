@@ -1,3 +1,4 @@
+
 pipeline {
     agent any
 
@@ -8,9 +9,10 @@ pipeline {
     }
 
     environment {
-        IMAGE_NAME = 'DOCKERHUB_USERNAME/task-manager'
+        IMAGE_NAME = 'safaza/task-manager'
         IMAGE_TAG = "${BUILD_NUMBER}"
         SONAR_HOST_URL = 'http://localhost:9000'
+        KUBECONFIG = '/var/lib/jenkins/.kube/config'
     }
 
     stages {
@@ -26,7 +28,8 @@ pipeline {
             }
             post {
                 always {
-                    junit allowEmptyResults: true, testResults: 'target/surefire-reports/*.xml'
+                    junit allowEmptyResults: true,
+                          testResults: 'target/surefire-reports/*.xml'
                 }
             }
         }
@@ -97,7 +100,7 @@ pipeline {
         stage('Déploiement Minikube') {
             steps {
                 sh '''
-                    sed "s|DOCKERHUB_USERNAME/task-manager:1.0.0|$IMAGE_NAME:$IMAGE_TAG|g" k8s/deployment.yaml | kubectl apply -f -
+                    sed "s|safaza/task-manager:1.0.0|$IMAGE_NAME:$IMAGE_TAG|g" k8s/deployment.yaml | kubectl apply -f -
                     kubectl rollout status deployment/task-manager --timeout=120s
                 '''
             }
@@ -109,15 +112,18 @@ pipeline {
                     mkdir -p reports
                     minikube service task-manager-service --url > service-url.txt
                     APP_URL=$(head -n 1 service-url.txt)
+
                     docker run --rm --network host \
                       -v "$WORKSPACE/reports:/zap/wrk/:rw" \
                       ghcr.io/zaproxy/zaproxy:stable \
-                      zap-baseline.py -t "$APP_URL" -r zap-report.html -J zap-report.json || true
+                      zap-baseline.py -t "$APP_URL" \
+                      -r zap-report.html -J zap-report.json || true
                 '''
             }
             post {
                 always {
-                    archiveArtifacts artifacts: 'reports/*,service-url.txt', allowEmptyArchive: true
+                    archiveArtifacts artifacts: 'reports/*,service-url.txt',
+                                     allowEmptyArchive: true
                 }
             }
         }
@@ -135,3 +141,4 @@ pipeline {
         }
     }
 }
+
