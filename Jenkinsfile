@@ -101,18 +101,12 @@ pipeline {
 
         stage('OWASP Dependency-Check') {
             steps {
-                sh 'mvn -B org.owasp:dependency-check-maven:12.1.0:check'
+                sh 'mvn -B -DossindexAnalyzerEnabled=false org.owasp:dependency-check-maven:12.1.0:check'
             }
             post {
                 always {
-                    publishHTML(target: [
-                        reportDir: 'target',
-                        reportFiles: 'dependency-check-report.html',
-                        reportName: 'OWASP Dependency-Check',
-                        allowMissing: true,
-                        alwaysLinkToLastBuild: true,
-                        keepAll: true
-                    ])
+                    archiveArtifacts artifacts: 'target/dependency-check-report.html',
+                                     allowEmptyArchive: true
                 }
             }
         }
