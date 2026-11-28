@@ -35,14 +35,14 @@ pipeline {
         }
 
         stage('Analyse SonarQube') {
-    steps {
-        withSonarQubeEnv('SonarQube') {
-            withCredentials([string(credentialsId: 'sonarqube-token', variable: 'SONAR_TOKEN')]) {
-                sh 'mvn -B org.sonarsource.scanner.maven:sonar-maven-plugin:5.0.0.4389:sonar -Dsonar.token=$SONAR_TOKEN'
+            steps {
+                withSonarQubeEnv('SonarQube') {
+                    withCredentials([string(credentialsId: 'sonarqube-token', variable: 'SONAR_TOKEN')]) {
+                        sh 'mvn -B org.sonarsource.scanner.maven:sonar-maven-plugin:5.0.0.4389:sonar -Dsonar.token=$SONAR_TOKEN -Dsonar.projectKey=Task-Manager'
+                    }
+                }
             }
         }
-    }
-}
 
         stage('Quality Gate') {
             steps {
@@ -143,4 +143,3 @@ pipeline {
         }
     }
 }
-
