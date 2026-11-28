@@ -47,7 +47,54 @@ pipeline {
         stage('Quality Gate') {
             steps {
                 timeout(time: 5, unit: 'MINUTES') {
-                    waitForQualityGate abortPipeline: true
+                    withSonarQubeEnv('SonarQube') {
+                        withCredentials([string(credentialsId: 'sonarqube-token', variable: 'SONAR_TOKEN')]) {
+                            sh '''
+                                set -eu
+                                task_id=$(sed -n 's/^ceTaskId=//p' target/sonar/report-task.txt)
+                                if [ -z "$task_id" ]; then
+                                    echo 'SonarQube analysis task ID was not found in target/sonar/report-task.txt.'
+                                    exit 1
+                                fi
+
+                                echo 'Waiting for SonarQube analysis to finish.'
+                                analysis_id=''
+                                for attempt in $(seq 1 55); do
+                                    task_json=$(curl -fsS --user "$SONAR_TOKEN:" "$SONAR_HOST_URL/api/ce/task?id=$task_id")
+                                    task_status=$(printf '%s' "$task_json" | python3 -c "import json,sys; print(json.load(sys.stdin)['task']['status'])")
+                                    case "$task_status" in
+                                        SUCCESS)
+                                            analysis_id=$(printf '%s' "$task_json" | python3 -c "import json,sys; print(json.load(sys.stdin)['task'].get('analysisId', ''))")
+                                            break
+                                            ;;
+                                        FAILED|CANCELED)
+                                            printf '%s' "$task_json" | python3 -c "import json,sys; print(json.load(sys.stdin)['task'].get('errorMessage', 'SonarQube analysis failed.'))"
+                                            exit 1
+                                            ;;
+                                        PENDING|IN_PROGRESS)
+                                            sleep 5
+                                            ;;
+                                        *)
+                                            echo "Unexpected SonarQube analysis status: $task_status"
+                                            exit 1
+                                            ;;
+                                    esac
+                                done
+
+                                if [ -z "$analysis_id" ]; then
+                                    echo 'Timed out waiting for SonarQube analysis.'
+                                    exit 1
+                                fi
+
+                                quality_json=$(curl -fsS --user "$SONAR_TOKEN:" "$SONAR_HOST_URL/api/qualitygates/project_status?analysisId=$analysis_id")
+                                quality_status=$(printf '%s' "$quality_json" | python3 -c "import json,sys; print(json.load(sys.stdin)['projectStatus']['status'])")
+                                echo "SonarQube Quality Gate: $quality_status"
+                                if [ "$quality_status" != 'OK' ]; then
+                                    exit 1
+                                fi
+                            '''
+                        }
+                    }
                 }
             }
         }
