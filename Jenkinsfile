@@ -112,13 +112,28 @@ pipeline {
             }
         }
 
-        stage('Déploiement Minikube') {
+        stage('Déploiement Kubernetes Docker Desktop') {
             steps {
                 sh '''
-                    minikube update-context
+                    set -eu
+                    CONFIG=''
+                    for candidate in /var/lib/jenkins/.kube/config /home/*/.kube/config /root/.kube/config /mnt/c/Users/USER/.kube/config; do
+                        if [ -r "$candidate" ] && kubectl --kubeconfig="$candidate" config get-contexts -o name 2>/dev/null | grep -Fxq 'docker-desktop'; then
+                            CONFIG="$candidate"
+                            break
+                        fi
+                    done
+                    if [ -z "$CONFIG" ]; then
+                        echo 'No readable kubeconfig with the docker-desktop context was found.'
+                        echo 'Checked Jenkins, Ubuntu home, root, and Windows user kubeconfig paths.'
+                        exit 1
+                    fi
+                    export KUBECONFIG="$CONFIG"
+                    kubectl config use-context docker-desktop
                     kubectl cluster-info
                     sed "s|raneeem/task-manager:1.0.0|$IMAGE_NAME:$IMAGE_TAG|g" k8s/deployment.yaml | kubectl apply -f -
                     kubectl rollout status deployment/task-manager --timeout=120s
+                    kubectl get service task-manager-service
                 '''
             }
         }
@@ -126,9 +141,23 @@ pipeline {
         stage('Test dynamique OWASP ZAP') {
             steps {
                 sh '''
+                    set -eu
                     mkdir -p reports
-                    minikube service task-manager-service --url > service-url.txt
-                    APP_URL=$(head -n 1 service-url.txt)
+                    APP_URL='http://127.0.0.1:18081'
+                    echo "$APP_URL" > service-url.txt
+                    kubectl port-forward --address 0.0.0.0 service/task-manager-service 18081:8080 > port-forward.log 2>&1 &
+                    PF_PID=$!
+                    trap 'kill "$PF_PID" 2>/dev/null || true' EXIT
+                    ready=0
+                    for attempt in $(seq 1 30); do
+                        if curl -sS --max-time 2 -o /dev/null "$APP_URL"; then ready=1; break; fi
+                        sleep 2
+                    done
+                    if [ "$ready" -ne 1 ]; then
+                        cat port-forward.log
+                        echo 'The application did not respond through kubectl port-forward.'
+                        exit 1
+                    fi
                     docker run --rm --network host \
                       -v "$WORKSPACE/reports:/zap/wrk/:rw" \
                       ghcr.io/zaproxy/zaproxy:stable \
@@ -138,7 +167,7 @@ pipeline {
             }
             post {
                 always {
-                    archiveArtifacts artifacts: 'reports/*,service-url.txt', allowEmptyArchive: true
+                    archiveArtifacts artifacts: 'reports/*,service-url.txt,port-forward.log', allowEmptyArchive: true
                 }
             }
         }
