@@ -1,4 +1,3 @@
-
 pipeline {
     agent any
 
@@ -145,15 +144,15 @@ pipeline {
                     set -eu
                     mkdir -p reports
                     chmod 777 reports
-                    APP_URL='http://127.0.0.1:18081'
-                    ZAP_URL='http://host.docker.internal:18081'
+                    APP_URL='http://127.0.0.1:18081/api/tasks'
+                    ZAP_URL='http://host.docker.internal:18081/api/tasks'
                     echo "$ZAP_URL" > service-url.txt
                     kubectl port-forward --address 0.0.0.0 service/task-manager-service 18081:8080 > port-forward.log 2>&1 &
                     PF_PID=$!
                     trap 'kill "$PF_PID" 2>/dev/null || true' EXIT
                     ready=0
                     for attempt in $(seq 1 30); do
-                        if curl -sS --max-time 2 -o /dev/null "$APP_URL"; then ready=1; break; fi
+                        if curl -fsS --max-time 2 -o /dev/null "$APP_URL"; then ready=1; break; fi
                         sleep 2
                     done
                     if [ "$ready" -ne 1 ]; then
