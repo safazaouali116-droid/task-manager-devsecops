@@ -9,7 +9,7 @@ pipeline {
     }
 
     environment {
-        IMAGE_NAME = 'safaza/task-manager'
+        IMAGE_NAME = 'raneeem/task-manager'
         IMAGE_TAG = "${BUILD_NUMBER}"
         SONAR_HOST_URL = 'http://localhost:9000'
         KUBECONFIG = '/var/lib/jenkins/.kube/config'
@@ -143,7 +143,7 @@ pipeline {
         stage('Déploiement Minikube') {
             steps {
                 sh '''
-                    sed "s|safaza/task-manager:1.0.0|$IMAGE_NAME:$IMAGE_TAG|g" k8s/deployment.yaml | kubectl apply -f -
+                    sed "s|raneeem/task-manager:1.0.0|$IMAGE_NAME:$IMAGE_TAG|g" k8s/deployment.yaml | kubectl apply -f -
                     kubectl rollout status deployment/task-manager --timeout=120s
                 '''
             }
