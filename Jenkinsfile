@@ -146,7 +146,8 @@ pipeline {
                     mkdir -p reports
                     chmod 777 reports
                     APP_URL='http://127.0.0.1:18081'
-                    echo "$APP_URL" > service-url.txt
+                    ZAP_URL='http://host.docker.internal:18081'
+                    echo "$ZAP_URL" > service-url.txt
                     kubectl port-forward --address 0.0.0.0 service/task-manager-service 18081:8080 > port-forward.log 2>&1 &
                     PF_PID=$!
                     trap 'kill "$PF_PID" 2>/dev/null || true' EXIT
@@ -160,10 +161,10 @@ pipeline {
                         echo 'The application did not respond through kubectl port-forward.'
                         exit 1
                     fi
-                    docker run --rm --network host \
+                    docker run --rm \
                       -v "$WORKSPACE/reports:/zap/wrk/:rw" \
                       ghcr.io/zaproxy/zaproxy:stable \
-                      zap-baseline.py -t "$APP_URL" \
+                      zap-baseline.py -t "$ZAP_URL" \
                       -r zap-report.html -J zap-report.json || ZAP_STATUS=$?
                     if [ ! -s reports/zap-report.html ] || [ ! -s reports/zap-report.json ]; then
                       echo 'ZAP did not produce both report files.'
